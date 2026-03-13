@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Juego VinciBot - Niveles por Imagen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .drag { cursor: grab; }
+        .drag:active { cursor: grabbing; }
+        .drop {
+            position: absolute;
+            border: 3px dashed red;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border-radius: 50%;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        .correct {
+            background: #22c55e !important;
+            color: white !important;
+            border: 2px solid white !important;
+        }
+        .hidden { display: none; }
+        #robot-img { max-height: 70vh; object-fit: contain; }
+        .btn-nav {
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .btn-nav.active {
+            background-color: #2563eb;
+            color: white;
+            border-color: #1e3a8a;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 flex flex-col items-center font-sans">
+
+    <div class="text-center mb-4">
+        <h1 class="text-3xl font-black text-slate-800 uppercase tracking-tighter">🤖 Desafío VinciBot</h1>
+        
+        <!-- SELECTOR DE NIVELES -->
+        <div class="flex items-center justify-center gap-2 mt-4">
+            <button onclick="loadLevel(0)" id="btn-0" class="btn-nav bg-white px-4 py-2 rounded-lg font-bold shadow-sm border border-slate-200">Nivel 1</button>
+            <button onclick="loadLevel(1)" id="btn-1" class="btn-nav bg-white px-4 py-2 rounded-lg font-bold shadow-sm border border-slate-200">Nivel 2</button>
+            <button onclick="loadLevel(2)" id="btn-2" class="btn-nav bg-white px-4 py-2 rounded-lg font-bold shadow-sm border border-slate-200 border-2 border-blue-500">Nivel 3</button>
+        </div>
+        <p id="level-title" class="text-blue-700 font-bold text-lg uppercase mt-2 italic">Cargando ubicación...</p>
+    </div>
+
+    <div class="flex gap-6 items-start w-full max-w-6xl justify-center">
+        <!-- PANEL DE PIEZAS -->
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-64 border-b-8 border-blue-500 shrink-0">
+            <h2 class="font-bold text-center mb-4 text-slate-500 text-[10px] uppercase tracking-widest text-wrap">Piezas a identificar</h2>
+            <div id="pieces" class="flex flex-col gap-2">
+                <!-- Piezas dinámicas -->
+            </div>
+
+            <button id="next-btn" onclick="nextStep()" class="hidden mt-6 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg w-full animate-bounce">
+                ¡Siguiente Imagen! ➔
+            </button>
+
+            <button onclick="location.reload()" class="mt-8 text-[10px] uppercase font-bold text-slate-400 hover:text-red-500 w-full text-center">
+                Reiniciar juego
+            </button>
+        </div>
+
+        <!-- AREA DEL ROBOT -->
+        <div class="relative bg-white p-2 rounded-3xl shadow-2xl border-4 border-white flex-1 flex justify-center items-center overflow-hidden min-h-[500px]">
+            <img id="robot-img" src="vincibot1.jpg.jpeg" 
+                 onerror="this.style.display='none'; document.getElementById('img-error').classList.remove('hidden')"
+                 onload="this.style.display='block'; document.getElementById('img-error').classList.add('hidden')"
+                 class="rounded-2xl shadow-inner max-w-full h-auto">
+            
+            <div id="img-error" class="hidden text-center p-10 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl">
+                <p class="text-slate-400 font-bold">Imagen no encontrada:<br><span id="missing-name" class="text-blue-500 font-mono"></span><br><br><small>Verifica el nombre en tu carpeta.</small></p>
+            </div>
+
+            <div id="drop-zones-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const levels = [
+            {
+                title: "Imagen 1: Vista Frontal",
+                image: "vincibot1.jpg.jpeg",
+                parts: [
+                    { name: "Matriz LED", top: "65%", left: "50%", w: "150px", h: "80px", r: "10px" }
+                ]
+            },
+            {
+                title: "Imagen 2: Chasis Inferior",
+                image: "vincibot2.jpg.jpeg",
+                parts: [
+                    { name: "Rueda Izquierda", top: "40%", left: "27%", w: "75px", h: "120px", r: "15px" },
+                    { name: "Rueda Derecha", top: "40%", left: "72%", w: "75px", h: "120px", r: "15px" },
+                    { name: "Sensores de Línea", top: "70%", left: "50%", w: "140px", h: "50px", r: "10px" }
+                ]
+            },
+            {
+                title: "Imagen 3: Conexiones y Botones",
+                image: "vincibot3.jpg.jpeg",
+                parts: [
+                    { name: "Comenzar Programa", top: "40%", left: "45%", w: "100px", h: "75px", r: "15px" },
+                    { name: "Botón Encendido", top: "70%", left: "45%", w: "50px", h: "50px", r: "50%" },
+                    { name: "Puerto USB-C", top: "60%", left: "33%", w: "80px", h: "50px", r: "8px" }
+                ]
+            }
+        ];
+
+        let currentLevel = 0;
+        let solvedInLevel = 0;
+
+        function loadLevel(index) {
+            currentLevel = index;
+            const level = levels[index];
+            solvedInLevel = 0;
+            
+            document.querySelectorAll('.btn-nav').forEach((btn, i) => {
+                if(i === index) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            document.getElementById('level-title').textContent = level.title;
+            const img = document.getElementById('robot-img');
+            img.src = level.image;
+            document.getElementById('missing-name').textContent = level.image;
+            document.getElementById('next-btn').classList.add('hidden');
+            
+            const piecesContainer = document.getElementById('pieces');
+            const dropContainer = document.getElementById('drop-zones-container');
+            piecesContainer.innerHTML = '';
+            dropContainer.innerHTML = '';
+
+            const pieceNames = level.parts.map(p => p.name).sort(() => Math.random() - 0.5);
+            pieceNames.forEach(name => {
+                const el = document.createElement('div');
+                el.textContent = name;
+                el.className = "drag bg-blue-600 text-white p-3 rounded-xl text-center font-bold shadow-md text-sm transition-all hover:bg-blue-700 border-b-4 border-blue-900 active:border-b-0 active:translate-y-1";
+                el.draggable = true;
+                el.addEventListener('dragstart', (e) => e.dataTransfer.setData('text', name));
+                piecesContainer.appendChild(el);
+            });
+
+            level.parts.forEach(part => {
+                const zone = document.createElement('div');
+                zone.className = "drop";
+                zone.style.top = part.top;
+                zone.style.left = part.left;
+                zone.style.width = part.w;
+                zone.style.height = part.h;
+                zone.style.borderRadius = part.r;
+                zone.style.transform = "translate(-50%, -50%)";
+                zone.dataset.part = part.name;
+                zone.textContent = "?";
+
+                zone.addEventListener('dragover', (e) => e.preventDefault());
+                zone.addEventListener('drop', handleDrop);
+                dropContainer.appendChild(zone);
+            });
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const draggedName = e.dataTransfer.getData('text');
+            const targetZone = e.currentTarget;
+            
+            if (draggedName === targetZone.dataset.part) {
+                targetZone.textContent = "✓";
+                targetZone.classList.add('correct');
+                
+                document.querySelectorAll('.drag').forEach(d => {
+                    if (d.textContent === draggedName) d.remove();
+                });
+
+                solvedInLevel++;
+                if (solvedInLevel === levels[currentLevel].parts.length) {
+                    if(currentLevel < levels.length - 1) {
+                        document.getElementById('next-btn').classList.remove('hidden');
+                    } else {
+                        alert("¡Excelente! Has identificado todas las piezas correctamente.");
+                    }
+                }
+            } else {
+                targetZone.textContent = "✖";
+                targetZone.style.background = "rgba(239, 68, 68, 0.4)";
+                setTimeout(() => {
+                    targetZone.textContent = "?";
+                    targetZone.style.background = "rgba(255, 255, 255, 0.7)";
+                }, 600);
+            }
+        }
+
+        function nextStep() {
+            if (currentLevel < levels.length - 1) {
+                loadLevel(currentLevel + 1);
+            }
+        }
+
+        window.onload = () => loadLevel(0);
+    </script>
+</body>
+</html>}
